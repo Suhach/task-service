@@ -1,44 +1,66 @@
 package task
 
-import "context"
+import (
+	"context"
+	"fmt"
+	cl "github.com/Suhach/task-service/internal/client"
+)
 
-type Service interface {
-	GetTask(ctx context.Context, id int) (*Task, error)
-	ListTasks(ctx context.Context) ([]*Task, error)
-	GetTaskByUserID(ctx context.Context, userID int) ([]*Task, error)
-	CreateTask(ctx context.Context, task *Task) error
-	UpdateTask(ctx context.Context, id int, task *Task) error
-	DeleteTask(ctx context.Context, id int) error
+type Service struct {
+	repo       *Repository
+	userClient *cl.UserClient
 }
 
-type TaskService struct {
-	repo *TaskREPO
+func NewService(repo *Repository, userClient *cl.UserClient) *Service {
+	return &Service{repo: repo, userClient: userClient}
 }
 
-func NewTaskService(repo *TaskREPO) *TaskService {
-	return &TaskService{repo}
+func (s *Service) Create(task string, isDone bool, userID uint) (*Task, error) {
+	_, err := s.userClient.GetUser(context.Background(), uint32(userID))
+	if err != nil {
+		return nil, fmt.Errorf("user with ID %d not found: %w", userID, err)
+	}
+	t := &Task{Task: task, IsDone: isDone, UserID: userID}
+	if err := s.repo.Create(t); err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
-func (s *TaskService) GetTask(ctx context.Context, id int) (*Task, error) {
-	return s.repo.GetTask(ctx, id)
+func (s *Service) GetByUserID(userID uint) ([]Task, error) {
+	_, err := s.userClient.GetUser(context.Background(), uint32(userID))
+	if err != nil {
+		return nil, fmt.Errorf("user with ID %d not found: %w", userID, err)
+	}
+	return s.repo.GetByUserID(userID)
 }
 
-func (s *TaskService) ListTasks(ctx context.Context) ([]*Task, error) {
-	return s.repo.ListTasks(ctx)
+func (s *Service) GetAll() ([]Task, error) {
+	return s.repo.GetAll()
 }
 
-func (s *TaskService) GetTaskByUserID(ctx context.Context, userID int) ([]*Task, error) {
-	return s.repo.GetTaskByUserID(ctx, userID)
+func (s *Service) Get(id uint) (*Task, error) {
+	return s.repo.GetByID(id)
 }
 
-func (s *TaskService) CreateTask(ctx context.Context, task *Task) error {
-	return s.repo.CreateTask(ctx, task)
+func (s *Service) Update(id uint, task string, isDone bool, userID uint) (*Task, error) {
+	_, err := s.userClient.GetUser(context.Background(), uint32(userID))
+	if err != nil {
+		return nil, fmt.Errorf("user with ID %d not found: %w", userID, err)
+	}
+	t, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	t.Task = task
+	t.IsDone = isDone
+	t.UserID = userID
+	if err := s.repo.Update(t); err != nil {
+		return nil, err
+	}
+	return t, nil
 }
 
-func (s *TaskService) UpdateTask(ctx context.Context, id int, task *Task) error {
-	return s.repo.UpdateTask(ctx, id, task)
-}
-
-func (s *TaskService) DeleteTask(ctx context.Context, id int) error {
-	return s.repo.DeleteTask(ctx, id)
+func (s *Service) Delete(id uint) error {
+	return s.repo.Delete(id)
 }
